@@ -1,4 +1,4 @@
-# High-Yield LLD / OOP Python — 15 Questions Ranked by Importance
+# High-Yield LLD / OOP Python — 17 Questions Ranked by Importance
 ### Target: SDE 1–2 Years | FAANG · Top PBC · India Startups · Remote Roles
 
 ---
@@ -28,15 +28,17 @@ Every problem below has an explicit **"What to actually code"** vs **"What to ju
 | 4 | LRU Cache | DSA-as-LLD | Easy — fully codeable |
 | 5 | Ride Matching | Multi-pattern, State | Hard — scope it down heavily |
 | 6 | Rate Limiter | Strategy | Medium — one algo only |
-| 7 | Notification Service | Observer | Easy — fully codeable |
-| 8 | Vending Machine | State Machine | Medium — 2-3 states only |
-| 9 | Job Scheduler | Command, PQ | Medium — no recurring/retry in code |
-| 10 | Food Delivery | Multi-pattern, State | Hard — scope it down heavily |
-| 11 | In-Memory File System | Composite | Medium — mkdir + ls + get_size |
-| 12 | Logger Framework | Chain of Responsibility | Easy — fully codeable |
-| 13 | Chess | Rules Engine | Hard — 2-3 pieces only |
-| 14 | Pub-Sub System | Observer (system level) | Medium — push model only |
-| 15 | Twitter Feed | Multi-pattern, Fan-out | Hard — fan-out on write only |
+| 7 | Pub-Sub System | Observer (system level) | Medium — push model only |
+| 8 | Notification Service | Observer | Easy — fully codeable |
+| 9 | Vending Machine | State Machine | Medium — 2-3 states only |
+| 10 | Job Scheduler | Command, PQ | Medium — no recurring/retry in code |
+| 11 | Food Delivery | Multi-pattern, State | Hard — scope it down heavily |
+| 12 | In-Memory File System | Composite | Medium — mkdir + ls + get_size |
+| 13 | Elevator System | State Machine, Strategy | Hard — scope to single elevator first |
+| 14 | Snake & Ladder | OOP, Builder | Easy — fully codeable |
+| 15 | Chess | Rules Engine | Hard — 2-3 pieces only |
+| 16 | Twitter Feed | Multi-pattern, Fan-out | Hard — fan-out on write only |
+| 17 | ATM / Digital Wallet | State Machine, Concurrency | Medium — core flow fully codeable |
 
 ---
 ---
@@ -344,7 +346,60 @@ allow_request(user_id: str) -> bool
 ---
 ---
 
-# 7. Notification Service ★★★★☆
+# 7. Pub-Sub System – Kafka Lite ★★★★☆
+**Asked at:** Amazon, Flipkart, Hotstar, Razorpay.
+**Pattern:** Observer at system/service level.
+
+## ✅ What to Actually Code (35 min)
+- `Message` dataclass
+- `Topic` with `messages`, `subscribers`, `add_message()`, `notify_subscribers()`
+- `Subscriber` abstract with `on_message()`
+- `PubSubBroker` Singleton with `create_topic()`, `publish()`, `subscribe()`
+- One concrete `Subscriber` (e.g. `LoggingSubscriber`)
+
+## 💬 What to Just Discuss
+- `Subscription.offset` for message replay — describe it, don't code
+- Pull model vs push model tradeoff
+- Consumer groups — one offset shared across a group of subscribers
+- Persistence / durability at scale
+
+## Core Entities
+```
+Message      → id, topic_name, payload, published_at: datetime
+Topic        → name, messages: List[Message], subscribers: List[Subscriber]
+Subscription → subscriber, topic_name, offset: int
+PubSubBroker → topics: Dict[str, Topic]
+```
+
+## Important Methods
+```python
+# PubSubBroker (Singleton)
+create_topic(name) -> Topic
+publish(topic_name, message) -> None
+subscribe(topic_name, subscriber) -> Subscription
+unsubscribe(topic_name, subscriber) -> None
+
+# Topic
+add_message(message) -> None
+notify_subscribers(message) -> None   # calls subscriber.on_message() for each
+
+# Subscriber (abstract)
+on_message(message: Message) -> None
+```
+
+## Key Design Notes
+- `publish` → `topic.add_message()` → `topic.notify_subscribers()` — clean three-step flow
+- Push model: broker calls `on_message` directly — simple, implement this in 45 min
+- Pull model: subscriber calls `get_messages(from_offset)` — discuss as extension
+- This is Observer lifted to the system/service level — an SDE-2 signal
+
+## Common Extension
+> *"Add consumer groups"* → group shares one offset — only one member processes each message
+
+---
+---
+
+# 8. Notification Service ★★★★☆
 **Asked at:** Every product company.
 **Pattern:** Observer, Factory.
 
@@ -389,7 +444,7 @@ send(notification: Notification) -> bool
 ---
 ---
 
-# 8. Vending Machine ★★★☆☆
+# 9. Vending Machine ★★★☆☆
 **Asked at:** Amazon, Paytm, Flipkart.
 **Pattern:** State Machine.
 
@@ -438,7 +493,7 @@ cancel(machine) -> float
 ---
 ---
 
-# 9. Job Scheduler ★★★☆☆
+# 10. Job Scheduler ★★★☆☆
 **Asked at:** Razorpay, Juspay, Zepto, Curefit.
 **Pattern:** Command, Priority Queue.
 
@@ -489,7 +544,7 @@ run() -> None                        # calls self.task()
 ---
 ---
 
-# 10. Food Delivery – Swiggy Lite ★★★☆☆
+# 11. Food Delivery – Swiggy Lite ★★★☆☆
 **Asked at:** Swiggy, Zomato, Zepto, Dunzo, Blinkit.
 **Pattern:** Multi-entity, State (order lifecycle), Strategy (discounts).
 
@@ -541,7 +596,7 @@ apply(order_total: float) -> float
 ---
 ---
 
-# 11. In-Memory File System ★★★☆☆
+# 12. In-Memory File System ★★★☆☆
 **Asked at:** Google, Microsoft.
 **Pattern:** Composite (File and Directory as uniform Node).
 
@@ -595,59 +650,125 @@ is_directory() -> bool
 ---
 ---
 
-# 12. Logger Framework ★★★☆☆
-**Asked at:** Adobe, Oracle, Salesforce, infra rounds.
-**Pattern:** Chain of Responsibility, Singleton.
+# 13. Elevator System ★★★☆☆
+**Asked at:** Amazon, Google, Microsoft, Atlassian.
+**Pattern:** State Machine, Strategy (dispatch algorithm).
 
 ## ✅ What to Actually Code (35 min)
-- `LogLevel` enum
-- `LogMessage` dataclass
-- `LogHandler` abstract with `handle()`, `set_next()`, `_write()`
-- `ConsoleHandler` and `FileHandler` concrete classes
-- `Logger` with `log()`, `add_handler()`, and convenience methods
-- `LogManager` Singleton with `get_logger()`
+- `Direction`, `ElevatorState` enums
+- `Request` dataclass with `source_floor`, `dest_floor`, `direction`
+- `Elevator` with `current_floor`, `state`, `direction`, `requests` queue
+- `Elevator.process_next_request()` — move toward next target floor, update state
+- `ElevatorController.add_request()` and `dispatch()` — assign request to best elevator
+- One `DispatchStrategy` (e.g. `NearestCarStrategy`)
 
 ## 💬 What to Just Discuss
-- Async logging — `LogMessage` onto a `Queue`, background thread drains it
-- Log rotation in `FileHandler`
-- Adding a new handler (e.g. `AlertHandler`) — zero changes to existing code
+- SCAN algorithm (elevator algorithm) — process all requests in one direction before reversing
+- Multiple elevators with Strategy pattern — swap `NearestCarStrategy` for `SCANStrategy` trivially
+- Express elevators for high floors — mention as a real-world extension
+- Load balancing across elevators
 
 ## Core Entities
 ```
-LogLevel     → DEBUG=1 / INFO=2 / WARNING=3 / ERROR=4 / CRITICAL=5
-LogMessage   → level: LogLevel, message: str, timestamp: datetime, logger_name: str
-Logger       → name, level: LogLevel, handlers: List[LogHandler]
-LogHandler   → level: LogLevel, next_handler: Optional[LogHandler]
+Direction       → UP / DOWN / IDLE
+ElevatorState   → MOVING / IDLE / MAINTENANCE
+Request         → id, source_floor: int, dest_floor: int, direction: Direction
+Elevator        → id, current_floor: int, state: ElevatorState,
+                  direction: Direction, requests: List[Request]
+ElevatorController → elevators: List[Elevator], dispatch_strategy: DispatchStrategy
 ```
 
 ## Important Methods
 ```python
-# Logger
-log(level: LogLevel, message: str) -> None
-debug / info / warning / error / critical(msg) -> None   # call self.log()
-add_handler(handler: LogHandler) -> None
+# ElevatorController
+add_request(source_floor, dest_floor) -> None
+dispatch(request: Request) -> Elevator     # delegates to dispatch_strategy
 
-# LogHandler (abstract)
-handle(log_message: LogMessage) -> None     # check level → _write() → pass to next
-set_next(handler: LogHandler) -> LogHandler
-_write(log_message: LogMessage) -> None     # subclasses implement
+# Elevator
+process_next_request() -> None            # move to next floor, open doors, update state
+add_request(request: Request) -> None
+is_available() -> bool
 
-# LogManager (Singleton)
-get_logger(name: str) -> Logger
+# DispatchStrategy (abstract)
+select_elevator(elevators, request) -> Elevator
+
+# NearestCarStrategy
+select_elevator(elevators, request) -> Elevator   # pick elevator with min |current_floor - source|
 ```
 
 ## Key Design Notes
-- `handle()`: if `log_message.level >= self.level` → call `_write()`, then call `next_handler.handle()`
-- `set_next()` returns `next_handler` for fluent chaining: `console.set_next(file).set_next(alert)`
-- `LogManager` caches by name — same name always returns same `Logger`
+- `ElevatorState` transitions: `IDLE → MOVING → IDLE` (after all requests cleared)
+- `Direction` transitions: `IDLE → UP/DOWN` on new request; flip when top/bottom reached
+- SCAN algorithm: process all floors in current direction before reversing — prevents starvation
+- The follow-up *"add multiple elevators"* is answered by swapping `DispatchStrategy` — zero change to `Elevator`
 
 ## Common Extension
-> *"Async logging"* → handler enqueues `LogMessage`; background thread drains and writes
+> *"Multiple elevators with SCAN dispatch"* → implement `SCANStrategy` — Strategy pattern makes this trivial
 
 ---
 ---
 
-# 13. Chess ★★☆☆☆
+# 14. Snake & Ladder ★★★☆☆
+**Asked at:** Amazon (SDE-2), Atlassian (Senior SWE) — 2024 interview reports.
+**Pattern:** Pure OOP, Builder (board setup).
+
+## ✅ What to Actually Code (35 min)
+- `CellType`, `GameStatus` enums
+- `Cell` dataclass with `cell_number`, `cell_type`, `teleport_to` (for snakes/ladders)
+- `Player` with `id`, `name`, `current_position`
+- `Board` with `cells: List[Cell]` and `get_cell(number)`
+- `BoardBuilder` — `add_snake()`, `add_ladder()`, `build()`
+- `Game.roll_and_move()` — roll dice, move player, resolve cell, check win
+
+## 💬 What to Just Discuss
+- TicTacToe variant — simpler board, same modeling instinct
+- Dice as a separate entity — allows weighted/loaded dice extension
+- Multiple players — `players: List[Player]`, round-robin turns
+- Win condition: exactly land on 100 (or last cell) — overshoot = no move
+
+## Core Entities
+```
+CellType   → NORMAL / SNAKE / LADDER
+GameStatus → IN_PROGRESS / FINISHED
+Cell       → number: int, cell_type: CellType, teleport_to: Optional[int]
+Player     → id, name, current_position: int
+Dice       → sides: int
+Board      → size: int, cells: List[Cell]
+Game       → board: Board, players: List[Player], current_turn: int, status: GameStatus
+```
+
+## Important Methods
+```python
+# Game
+roll_and_move(player: Player) -> int       # returns final position after teleport
+check_winner(player: Player) -> bool
+play_turn() -> None                        # orchestrates roll, move, resolve, check
+
+# Board
+get_cell(number: int) -> Cell
+
+# BoardBuilder
+add_snake(head: int, tail: int) -> BoardBuilder
+add_ladder(bottom: int, top: int) -> BoardBuilder
+build() -> Board
+
+# Dice
+roll() -> int
+```
+
+## Key Design Notes
+- `Cell.teleport_to` is `None` for `NORMAL`, snake-tail for `SNAKE`, ladder-top for `LADDER`
+- `roll_and_move`: new_pos = current + dice; if new_pos <= board.size → resolve cell, else stay
+- `BoardBuilder` is the Builder pattern — separates complex board construction from `Board` entity
+- Interviewers use this to watch raw modeling instinct — clean entities matter more than patterns
+
+## Common Extension
+> *"TicTacToe variant"* → `Board(3×3)`, `Cell` stores `Optional[Player]`, win check scans rows/cols/diagonals
+
+---
+---
+
+# 15. Chess ★★☆☆☆
 **Asked at:** Google, Microsoft, Atlassian.
 **Pattern:** OOP + Rules Engine.
 
@@ -701,59 +822,7 @@ is_within_bounds(pos) -> bool
 ---
 ---
 
-# 14. Pub-Sub System – Kafka Lite ★★☆☆☆
-**Asked at:** Amazon, Flipkart, Hotstar, Razorpay.
-**Pattern:** Observer at system/service level.
-
-## ✅ What to Actually Code (35 min)
-- `Message` dataclass
-- `Topic` with `messages`, `subscribers`, `add_message()`, `notify_subscribers()`
-- `Subscriber` abstract with `on_message()`
-- `PubSubBroker` Singleton with `create_topic()`, `publish()`, `subscribe()`
-- One concrete `Subscriber` (e.g. `LoggingSubscriber`)
-
-## 💬 What to Just Discuss
-- `Subscription.offset` for message replay — describe it, don't code
-- Pull model vs push model tradeoff
-- Consumer groups — one offset shared across a group of subscribers
-- Persistence / durability at scale
-
-## Core Entities
-```
-Message      → id, topic_name, payload, published_at: datetime
-Topic        → name, messages: List[Message], subscribers: List[Subscriber]
-Subscription → subscriber, topic_name, offset: int
-PubSubBroker → topics: Dict[str, Topic]
-```
-
-## Important Methods
-```python
-# PubSubBroker (Singleton)
-create_topic(name) -> Topic
-publish(topic_name, message) -> None
-subscribe(topic_name, subscriber) -> Subscription
-unsubscribe(topic_name, subscriber) -> None
-
-# Topic
-add_message(message) -> None
-notify_subscribers(message) -> None   # calls subscriber.on_message() for each
-
-# Subscriber (abstract)
-on_message(message: Message) -> None
-```
-
-## Key Design Notes
-- `publish` → `topic.add_message()` → `topic.notify_subscribers()` — clean three-step flow
-- Push model: broker calls `on_message` directly — simple, implement this in 45 min
-- Pull model: subscriber calls `get_messages(from_offset)` — discuss as extension
-
-## Common Extension
-> *"Add consumer groups"* → group shares one offset — only one member processes each message
-
----
----
-
-# 15. Twitter / Social Media Feed ★★☆☆☆
+# 16. Twitter / Social Media Feed ★★☆☆☆
 **Asked at:** Meta, Twitter/X, LinkedIn, ShareChat, Koo.
 **Pattern:** Multi-pattern — Fan-out, Observer, basic feed ranking.
 
@@ -805,17 +874,79 @@ _fan_out_on_write(tweet: Tweet) -> None    # push to all followers' feeds on pos
 ---
 ---
 
+# 17. ATM / Digital Wallet ★★★☆☆
+**Asked at:** Razorpay, PhonePe, Paytm, CRED.
+**Pattern:** State Machine, Concurrency.
+
+## ✅ What to Actually Code (35 min)
+- `ATMState` enum
+- `Card`, `Account`, `Transaction` dataclasses
+- `ATMState` abstract with `insert_card()`, `enter_pin()`, `select_transaction()`, `dispense()`, `eject_card()`
+- `IdleState`, `CardInsertedState`, `PINValidatedState`, `TransactionSelectedState`, `DispensingState` — all five
+- `ATM` delegating every action to `self.state`
+- `ATM.dispense_cash()` with a `threading.Lock()` — prevent double-dispense
+
+## 💬 What to Just Discuss
+- `WalletService` variant — `transfer()` with optimistic locking / DB transaction
+- PIN retry limit — `LockedState` after 3 failures
+- Network failure during dispensing — money deducted but not given — rollback strategy
+- Audit log on every transition
+
+## Core Entities
+```
+ATMState           → IDLE / CARD_INSERTED / PIN_VALIDATED / TRANSACTION_SELECTED / DISPENSING
+Card               → card_number, expiry, cvv, account: Account
+Account            → id, balance: float, pin_hash: str
+Transaction        → id, account_id, amount, transaction_type, timestamp, status
+ATM                → state: ATMState, current_card: Optional[Card], cash_available: float
+```
+
+## Important Methods
+```python
+# ATM — pure delegation, zero logic here
+insert_card(card: Card) -> None           # delegates to self.state.insert_card(self, card)
+enter_pin(pin: str) -> None
+select_transaction(amount, tx_type) -> None
+dispense() -> None
+eject_card() -> None
+
+# ATMState (abstract)
+insert_card(atm, card) -> None
+enter_pin(atm, pin) -> None
+select_transaction(atm, amount, tx_type) -> None
+dispense(atm) -> None
+eject_card(atm) -> None
+
+# Account
+validate_pin(pin: str) -> bool
+debit(amount: float) -> bool              # thread-safe — acquire lock before deducting
+```
+
+## Key Design Notes
+- State transitions: `Idle → CardInserted → PINValidated → TransactionSelected → Dispensing → Idle`
+- `ATM` has **zero if-else** — every action is delegated to current state (same pattern as Vending Machine)
+- `dispense()` uses `threading.Lock()` — prevents double-dispense race condition
+- States that don't support an action raise `InvalidOperationError`
+
+## Common Extension
+> *"PIN retry limit"* → count failures in `CardInsertedState`; transition to `LockedState` after 3
+
+---
+---
+
 ## Preparation Strategy
 
-### Phase 1 — Weeks 1–2 (Problems 1–7)
+### Phase 1 — Weeks 1–2 (Problems 1–8)
 These are fully codeable in 45 min. Solve cold with a timer. Review design notes after.
-Priority order: LRU Cache → Parking Lot → Notification Service → Splitwise → Rate Limiter → Vending Machine → BookMyShow
+Priority order: LRU Cache → Parking Lot → Notification Service → Splitwise → Rate Limiter → Pub-Sub → Vending Machine → BookMyShow
 
-### Phase 2 — Week 3 (Problems 8–12)
+### Phase 2 — Week 3 (Problems 9–14)
 These need scoping discipline. Practice saying *"I'll implement X, and just discuss Y"* out loud.
+Key adds: Elevator System (State + algorithm combo) and Snake & Ladder (raw modeling instinct).
 
-### Phase 3 — Week 4 (Problems 13–15)
-These are SDE 2 differentiators. Chess and Twitter will separate you from candidates who only prepped the standard 7.
+### Phase 3 — Week 4 (Problems 15–17)
+These are SDE 2 differentiators. Chess, Twitter, and ATM/Wallet will separate you from candidates who only prepped the standard 7.
+ATM is highest ROI for fintech PBC targets (Razorpay, PhonePe, Paytm, CRED).
 
 ---
 
@@ -829,12 +960,14 @@ These are SDE 2 differentiators. Chess and Twitter will separate you from candid
 | LRU Cache | Thread-safe + TTL expiry |
 | Ride Matching | Ride pooling |
 | Rate Limiter | Distributed with Redis |
+| Pub-Sub | Consumer groups |
 | Notification Service | Priority levels |
 | Vending Machine | Admin restock mode |
 | Job Scheduler | Cron expression support |
 | Food Delivery | Promo codes |
 | In-Memory File System | Move + permissions |
-| Logger Framework | Async logging with queue |
+| Elevator System | Multiple elevators with SCAN dispatch → Strategy |
+| Snake & Ladder | TicTacToe variant |
 | Chess | Castling |
-| Pub-Sub | Consumer groups |
 | Twitter Feed | Hybrid fan-out for celebrities |
+| ATM / Wallet | PIN retry limit → LockedState |
